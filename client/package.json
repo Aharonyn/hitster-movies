@@ -1,0 +1,23 @@
+{
+  "name": "movie-timeline-client",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.14.1",
+    "socket.io-client": "^4.7.1",
+    "framer-motion": "^10.12.16",
+    "@hello-pangea/dnd": "^13.1.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.2.2",
+    "vite": "^5.3.0",
+    "@vitejs/plugin-react": "^4.0.2"
+  }
+}
