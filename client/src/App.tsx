@@ -1,7 +1,7 @@
 import React from "react"
 import { BrowserRouter, Routes, Route } from "react-router-dom"
-import { LobbyPage } from "./pages/LobbyPage"
-import { HostPage } from "./pages/HostPage"
+import LobbyPage from "./pages/LobbyPage"
+import HostPage from "./pages/HostPage"
 import { PlayerPage } from "./pages/PlayerPage";
 
 export default function App() {
