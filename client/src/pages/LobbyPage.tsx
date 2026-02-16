@@ -19,38 +19,40 @@ export default function LobbyPage() {
   }
 
   return (
-    <div className="p-6 flex flex-col gap-4">
+    <div className="p-6 flex flex-col gap-4 max-w-md mx-auto">
       <h1 className="text-2xl font-bold">Movie Timeline</h1>
       <input
         type="text"
         placeholder="Your name"
         value={name}
         onChange={e => setName(e.target.value)}
-        className="border p-2 rounded"
+        className="border p-2 rounded text-black bg-white"
       />
       <div>
-        <label>Win score: {winScore}</label>
+        <label className="block mb-2">Win score: {winScore}</label>
         <input
           type="range"
           min={5}
           max={15}
           value={winScore}
           onChange={e => setWinScore(Number(e.target.value))}
+          className="w-full"
         />
       </div>
       <div>
-        <label>
+        <label className="flex items-center gap-2">
           <input
             type="checkbox"
             checked={sequelConfusion}
             onChange={e => setSequelConfusion(e.target.checked)}
-          />{" "}
-          Sequel Confusion Mode
+          />
+          <span>Sequel Confusion Mode</span>
         </label>
       </div>
       <button
         onClick={createRoom}
-        className="bg-blue-500 text-white p-2 rounded"
+        disabled={!name.trim()}
+        className="bg-blue-500 text-white p-2 rounded hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
       >
         Create Room
       </button>
