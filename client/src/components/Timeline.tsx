@@ -1,5 +1,5 @@
 import React from "react"
-import { Movie } from "../../server/src/types"
+import { Movie } from "../types"
 import MovieCard from "./MovieCard"
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd"
 

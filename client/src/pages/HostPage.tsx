@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom"
 import { socket } from "../socket"
 import Timeline from "../components/Timeline"
 import TrailerPlayer from "../components/TrailerPlayer"
-import { Movie } from "../../server/src/types"
+import { Movie } from "../types"
 
 export default function HostPage() {
   const [params] = useSearchParams()

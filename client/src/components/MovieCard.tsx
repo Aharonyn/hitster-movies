@@ -1,5 +1,5 @@
 import React from "react"
-import { Movie } from "../../server/src/types"
+import { Movie } from "../types"
 
 interface MovieCardProps {
   movie: Movie
