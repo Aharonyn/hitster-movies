@@ -1,49 +1,3 @@
-import React, { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
-import { io, Socket } from "socket.io-client";
-
-interface Card {
-  id: string;
-  title: string;
-  year: number;
-  trailer: string;
-}
-
-interface Player {
-  id: string;
-  name: string;
-  timeline: Card[];
-}
-
-let socket: Socket;
-
-export const PlayerPage: React.FC = () => {
-  const { roomId, playerId } = useParams();
-  const [player, setPlayer] = useState<Player | null>(null);
-  const [currentCard, setCurrentCard] = useState<Card | null>(null);
-  const [guessYear, setGuessYear] = useState<number | null>(null);
-  const [message, setMessage] = useState<string>("");
-
-  useEffect(() => {
-    // Connect to the server
-    socket = io("/", { path: "/socket.io" });
-
-    // Join the room
-    socket.emit("joinRoom", { roomId, playerId });
-
-    // Update player state from server
-    socket.on("updatePlayer", (data: Player) => {
-      setPlayer(data);
-    });
-
-    // Receive current card to guess
-    socket.on("newCard", (card: Card) => {
-      setCurrentCard(card);
-      setGuessYear(null);
-      setMessage("");
-    });
-
-    // Receive result of guess
 import React, { useState, useEffect } from "react"
 import { useSearchParams } from "react-router-dom"
 import { socket } from "../socket"
@@ -291,3 +245,4 @@ export const PlayerPage: React.FC = () => {
     </div>
   )
 }
+

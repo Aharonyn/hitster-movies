@@ -30,38 +30,6 @@ io.on("connection", socket => {
       const hostPlayer = addPlayer(room.id, hostName)
       socket.join(room.id)
       socket.emit("room_created", { room, hostPlayer })
-import express from "express"
-import path from "path"
-import { createServer } from "http"
-import { Server } from "socket.io"
-import cors from "cors"
-import { createRoom, addPlayer, getRoom } from "./roomManager"
-
-const app = express()
-app.use(cors())
-
-// Serve static files from the public directory (copied during build)
-const clientBuildPath = path.join(__dirname, "../public")
-app.use(express.static(clientBuildPath))
-
-// Socket.io setup
-const httpServer = createServer(app)
-const io = new Server(httpServer, { 
-  cors: { 
-    origin: "*",
-    methods: ["GET", "POST"]
-  } 
-})
-
-io.on("connection", socket => {
-  console.log("New socket connection:", socket.id)
-
-  socket.on("create_room", ({ settings, hostName }) => {
-    try {
-      const room = createRoom(socket.id, settings)
-      const hostPlayer = addPlayer(room.id, hostName)
-      socket.join(room.id)
-      socket.emit("room_created", { room, hostPlayer })
       // Emit room state to the host
       socket.emit("room_updated", room)
       console.log(`Room created: ${room.id} by ${hostName}`)
