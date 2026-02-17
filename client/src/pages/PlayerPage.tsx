@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom"
 import { socket } from "../socket"
 import Timeline from "../components/Timeline"
 import TrailerPlayer from "../components/TrailerPlayer"
+import RevealDialog from "../components/RevealDialog"
 import { Movie, Player, Room } from "../types"
 
 export const PlayerPage: React.FC = () => {
@@ -14,6 +15,7 @@ export const PlayerPage: React.FC = () => {
   const [player, setPlayer] = useState<Player | null>(null)
   const [currentMovie, setCurrentMovie] = useState<Movie | null>(null)
   const [phase, setPhase] = useState("lobby")
+  const [reveal, setReveal] = useState<any>(null)
 
   useEffect(() => {
     socket.emit("get_room", { roomId })
@@ -32,12 +34,18 @@ export const PlayerPage: React.FC = () => {
 
     socket.on("trailer_started", (movie: Movie) => {
       setCurrentMovie(movie)
+      setReveal(null)
+    })
+
+    socket.on("movie_reveal", (data: any) => {
+      setReveal(data)
     })
 
     return () => {
       socket.off("room_updated")
       socket.off("phase_changed")
       socket.off("trailer_started")
+      socket.off("movie_reveal")
     }
   }, [roomId, playerId])
 
@@ -50,6 +58,15 @@ export const PlayerPage: React.FC = () => {
 
   return (
     <div className="p-4 max-w-6xl mx-auto">
+      {/* Reveal Dialog */}
+      {reveal && (
+        <RevealDialog
+          reveal={reveal}
+          isHost={false}
+          onContinue={() => {}}
+        />
+      )}
+
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-white">🎬 {player?.name}</h1>

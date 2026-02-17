@@ -161,15 +161,19 @@ io.on("connection", socket => {
         currentPlayer.score += 1
         console.log(`Correct! ${currentPlayer.name} now has ${currentPlayer.score} points`)
 
-        // Check for winner
+        // Check for winner — still show reveal first, then game_over
         if (currentPlayer.score >= room.settings.winScore) {
-          room.phase = "finished"
-          io.to(roomId).emit("phase_changed", "finished")
-          io.to(roomId).emit("room_updated", room)
-          io.to(roomId).emit("game_over", {
-            winner: currentPlayer,
-            finalScores: room.players.map(p => ({ name: p.name, score: p.score }))
+          room.phase = "reveal"
+          io.to(roomId).emit("movie_reveal", {
+            movie: moved,
+            playerName: currentPlayer.name,
+            isCorrect: true,
+            newScore: currentPlayer.score,
+            isWinner: true
           })
+          io.to(roomId).emit("phase_changed", "reveal")
+          io.to(roomId).emit("room_updated", room)
+          // game_over is sent when host dismisses reveal via continue_game
           console.log(`Game over! Winner: ${currentPlayer.name}`)
           return
         }
@@ -183,17 +187,58 @@ io.on("connection", socket => {
       // Advance turn
       room.currentTurnIndex = (room.currentTurnIndex + 1) % room.players.length
 
-      // Start next trailer
+      // Show reveal dialog to everyone before moving on
+      room.phase = "reveal"
+      io.to(roomId).emit("movie_reveal", {
+        movie: moved,
+        playerName: currentPlayer.name,
+        isCorrect,
+        newScore: currentPlayer.score
+      })
+      io.to(roomId).emit("phase_changed", "reveal")
+      io.to(roomId).emit("room_updated", room)
+    } catch (err) {
+      console.error("place_movie error:", err)
+    }
+  })
+
+  // Host-only: dismiss reveal dialog and continue
+  socket.on("continue_game", ({ roomId }) => {
+    try {
+      const room = getRoom(roomId)
+      if (!room || room.hostId !== socket.id || room.phase !== "reveal") return
+
+      // Check if someone already won (score hit winScore before we got here)
+      const winner = room.players.find(p => p.score >= room.settings.winScore)
+      if (winner) {
+        room.phase = "finished"
+        io.to(roomId).emit("phase_changed", "finished")
+        io.to(roomId).emit("room_updated", room)
+        io.to(roomId).emit("game_over", {
+          winner,
+          finalScores: room.players.map(p => ({ name: p.name, score: p.score }))
+        })
+        return
+      }
+
       if (room.deck.length > 0) {
         room.currentMovie = room.deck.pop()!
         room.phase = "trailer"
-
         io.to(roomId).emit("phase_changed", "trailer")
         io.to(roomId).emit("trailer_started", room.currentMovie)
         io.to(roomId).emit("room_updated", room)
+      } else {
+        const topScorer = room.players.reduce((a, b) => b.score > a.score ? b : a)
+        room.phase = "finished"
+        io.to(roomId).emit("phase_changed", "finished")
+        io.to(roomId).emit("room_updated", room)
+        io.to(roomId).emit("game_over", {
+          winner: topScorer,
+          finalScores: room.players.map(p => ({ name: p.name, score: p.score }))
+        })
       }
     } catch (err) {
-      console.error("place_movie error:", err)
+      console.error("continue_game error:", err)
     }
   })
 

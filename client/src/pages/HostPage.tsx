@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom"
 import { socket } from "../socket"
 import Timeline from "../components/Timeline"
 import TrailerPlayer from "../components/TrailerPlayer"
+import RevealDialog from "../components/RevealDialog"
 import { Movie, Player, Room } from "../types"
 
 export default function HostPage() {
@@ -15,6 +16,7 @@ export default function HostPage() {
   const [currentMovie, setCurrentMovie] = useState<Movie | null>(null)
   const [phase, setPhase] = useState("lobby")
   const [copied, setCopied] = useState(false)
+  const [reveal, setReveal] = useState<any>(null)
 
   const copyRoomCode = () => {
     navigator.clipboard.writeText(roomId).then(() => {
@@ -40,12 +42,18 @@ export default function HostPage() {
 
     socket.on("trailer_started", (movie: Movie) => {
       setCurrentMovie(movie)
+      setReveal(null)
+    })
+
+    socket.on("movie_reveal", (data: any) => {
+      setReveal(data)
     })
 
     return () => {
       socket.off("room_updated")
       socket.off("phase_changed")
       socket.off("trailer_started")
+      socket.off("movie_reveal")
     }
   }, [roomId, playerId])
 
@@ -63,12 +71,26 @@ export default function HostPage() {
     socket.emit("end_game", { roomId })
   }
 
+  const handleContinue = () => {
+    setReveal(null)
+    socket.emit("continue_game", { roomId })
+  }
+
   const isMyTurn = room && room.players[room.currentTurnIndex]?.id === playerId
   const currentTurnPlayer = room?.players[room.currentTurnIndex]
   const gameActive = phase === "trailer" || phase === "placement"
 
   return (
     <div className="p-4 max-w-6xl mx-auto">
+      {/* Reveal Dialog */}
+      {reveal && (
+        <RevealDialog
+          reveal={reveal}
+          isHost={true}
+          onContinue={handleContinue}
+        />
+      )}
+
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-white">🎬 {hostPlayer?.name}</h1>
