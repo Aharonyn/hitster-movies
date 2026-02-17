@@ -14,8 +14,6 @@ export const PlayerPage: React.FC = () => {
   const [player, setPlayer] = useState<Player | null>(null)
   const [currentMovie, setCurrentMovie] = useState<Movie | null>(null)
   const [phase, setPhase] = useState("lobby")
-  const [skipVotes, setSkipVotes] = useState(0)
-  const [hasVotedSkip, setHasVotedSkip] = useState(false)
 
   useEffect(() => {
     socket.emit("get_room", { roomId })
@@ -30,39 +28,21 @@ export const PlayerPage: React.FC = () => {
 
     socket.on("phase_changed", (newPhase: string) => {
       setPhase(newPhase)
-      if (newPhase === "trailer") {
-        setSkipVotes(0)
-        setHasVotedSkip(false)
-      }
     })
 
     socket.on("trailer_started", (movie: Movie) => {
       setCurrentMovie(movie)
-      setSkipVotes(0)
-      setHasVotedSkip(false)
-    })
-
-    socket.on("skip_votes_updated", ({ skipVotes: votes }) => {
-      setSkipVotes(votes)
     })
 
     return () => {
       socket.off("room_updated")
       socket.off("phase_changed")
       socket.off("trailer_started")
-      socket.off("skip_votes_updated")
     }
   }, [roomId, playerId])
 
   const placeMovie = (sourceIndex: number, destinationIndex: number) => {
     socket.emit("place_movie", { roomId, playerId, sourceIndex, destinationIndex })
-  }
-
-  const handleVoteSkip = () => {
-    if (!hasVotedSkip) {
-      setHasVotedSkip(true)
-      socket.emit("vote_skip", { roomId, playerId })
-    }
   }
 
   const isMyTurn = room && room.players[room.currentTurnIndex]?.id === playerId
@@ -96,11 +76,8 @@ export const PlayerPage: React.FC = () => {
           <p className="text-center text-white font-semibold mb-3">🎬 What movie is this? Guess the year!</p>
           <TrailerPlayer
             youtubeId={currentMovie.youtubeId}
-            onEnd={() => {}} // Only host ends trailer
-            onVoteSkip={handleVoteSkip}
-            skipVotes={skipVotes}
-            totalPlayers={room?.players.length || 1}
-            hasVotedSkip={hasVotedSkip}
+            onEnd={() => {}}
+            isHost={false}
           />
         </div>
       )}

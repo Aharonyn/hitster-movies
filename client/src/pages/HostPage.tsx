@@ -14,8 +14,6 @@ export default function HostPage() {
   const [hostPlayer, setHostPlayer] = useState<Player | null>(null)
   const [currentMovie, setCurrentMovie] = useState<Movie | null>(null)
   const [phase, setPhase] = useState("lobby")
-  const [skipVotes, setSkipVotes] = useState(0)
-  const [hasVotedSkip, setHasVotedSkip] = useState(false)
   const [copied, setCopied] = useState(false)
 
   const copyRoomCode = () => {
@@ -38,27 +36,16 @@ export default function HostPage() {
 
     socket.on("phase_changed", (newPhase: string) => {
       setPhase(newPhase)
-      if (newPhase === "trailer") {
-        setSkipVotes(0)
-        setHasVotedSkip(false)
-      }
     })
 
     socket.on("trailer_started", (movie: Movie) => {
       setCurrentMovie(movie)
-      setSkipVotes(0)
-      setHasVotedSkip(false)
-    })
-
-    socket.on("skip_votes_updated", ({ skipVotes: votes }) => {
-      setSkipVotes(votes)
     })
 
     return () => {
       socket.off("room_updated")
       socket.off("phase_changed")
       socket.off("trailer_started")
-      socket.off("skip_votes_updated")
     }
   }, [roomId, playerId])
 
@@ -68,11 +55,8 @@ export default function HostPage() {
     socket.emit("place_movie", { roomId, playerId, sourceIndex, destinationIndex })
   }
 
-  const handleVoteSkip = () => {
-    if (!hasVotedSkip) {
-      setHasVotedSkip(true)
-      socket.emit("vote_skip", { roomId, playerId })
-    }
+  const handleSkip = () => {
+    socket.emit("trailer_finished", { roomId })
   }
 
   const isMyTurn = room && room.players[room.currentTurnIndex]?.id === playerId
@@ -126,11 +110,8 @@ export default function HostPage() {
           <p className="text-center text-white font-semibold mb-3">🎬 What movie is this? Guess the year!</p>
           <TrailerPlayer
             youtubeId={currentMovie.youtubeId}
-            onEnd={() => socket.emit("trailer_finished", { roomId })}
-            onVoteSkip={handleVoteSkip}
-            skipVotes={skipVotes}
-            totalPlayers={room?.players.length || 1}
-            hasVotedSkip={hasVotedSkip}
+            onEnd={handleSkip}
+            isHost={true}
           />
         </div>
       )}

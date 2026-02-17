@@ -12,30 +12,23 @@ const clientBuildPath = path.join(__dirname, "../public")
 app.use(express.static(clientBuildPath))
 
 const httpServer = createServer(app)
-const io = new Server(httpServer, { 
-  cors: { 
-    origin: "*",
-    methods: ["GET", "POST"]
-  } 
+const io = new Server(httpServer, {
+  cors: { origin: "*", methods: ["GET", "POST"] }
 })
 
-// Track skip votes per room: roomId -> Set of playerIds who voted
-const skipVotes: Record<string, Set<string>> = {}
-
 io.on("connection", socket => {
-  console.log("New socket connection:", socket.id)
+  console.log("New connection:", socket.id)
 
   socket.on("create_room", ({ settings, hostName }) => {
     try {
       const room = createRoom(socket.id, settings)
       const hostPlayer = addPlayer(room.id, hostName)
       socket.join(room.id)
-      skipVotes[room.id] = new Set()
       socket.emit("room_created", { room, hostPlayer })
       socket.emit("room_updated", room)
       console.log(`Room created: ${room.id} by ${hostName}`)
-    } catch (error) {
-      console.error("Error creating room:", error)
+    } catch (err) {
+      console.error("create_room error:", err)
       socket.emit("error", { message: "Failed to create room" })
     }
   })
@@ -55,8 +48,8 @@ io.on("connection", socket => {
         io.to(normalizedId).emit("room_updated", getRoom(normalizedId))
         console.log(`${name} joined room ${normalizedId}`)
       }
-    } catch (error) {
-      console.error("Error joining room:", error)
+    } catch (err) {
+      console.error("join_room error:", err)
       socket.emit("error", { message: "Failed to join room" })
     }
   })
@@ -67,165 +60,126 @@ io.on("connection", socket => {
       const room = getRoom(normalizedId)
       if (room) {
         socket.emit("room_updated", room)
-        if (room.phase === "trailer" && skipVotes[normalizedId]) {
-          socket.emit("skip_votes_updated", {
-            skipVotes: skipVotes[normalizedId].size,
-            totalPlayers: room.players.length
-          })
-        }
       } else {
         socket.emit("error", { message: "Room not found" })
       }
-    } catch (error) {
-      console.error("Error getting room:", error)
+    } catch (err) {
+      console.error("get_room error:", err)
     }
   })
 
   socket.on("start_game", ({ roomId }) => {
     try {
       const room = getRoom(roomId)
-      if (room && room.hostId === socket.id) {
-        room.phase = "trailer"
-        room.currentTurnIndex = 0
-        skipVotes[roomId] = new Set()
+      if (!room || room.hostId !== socket.id) return
 
-        if (room.deck.length > 0) {
-          const firstMovie = room.deck.pop()
-          if (firstMovie) {
-            room.currentMovie = firstMovie
-          }
-        }
+      room.currentTurnIndex = 0
+      room.phase = "trailer"
 
-        io.to(roomId).emit("phase_changed", "trailer")
-        io.to(roomId).emit("room_updated", room)
-        io.to(roomId).emit("trailer_started", room.currentMovie)
-        io.to(roomId).emit("skip_votes_updated", { skipVotes: 0, totalPlayers: room.players.length })
-        console.log(`Game started in room ${roomId}`)
+      if (room.deck.length > 0) {
+        room.currentMovie = room.deck.pop()!
       }
-    } catch (error) {
-      console.error("Error starting game:", error)
+
+      io.to(roomId).emit("phase_changed", "trailer")
+      io.to(roomId).emit("trailer_started", room.currentMovie)
+      io.to(roomId).emit("room_updated", room)
+      console.log(`Game started: ${roomId}`)
+    } catch (err) {
+      console.error("start_game error:", err)
     }
   })
 
-  socket.on("vote_skip", ({ roomId, playerId }) => {
+  // Host-only: called when host clicks Skip or trailer auto-ends
+  socket.on("trailer_finished", ({ roomId }) => {
     try {
       const room = getRoom(roomId)
       if (!room || room.phase !== "trailer") return
 
-      if (!skipVotes[roomId]) skipVotes[roomId] = new Set()
-      skipVotes[roomId].add(playerId)
+      const currentPlayer = room.players[room.currentTurnIndex]
+      if (!currentPlayer || !room.currentMovie) return
 
-      const votes = skipVotes[roomId].size
-      const total = room.players.length
+      // Give the current player this movie
+      currentPlayer.timeline.push(room.currentMovie)
+      room.currentMovie = undefined
+      room.phase = "placement"
 
-      io.to(roomId).emit("skip_votes_updated", { skipVotes: votes, totalPlayers: total })
-
-      // Skip if majority votes (more than half)
-      if (votes > total / 2) {
-        endTrailer(roomId)
-      }
-    } catch (error) {
-      console.error("Error voting to skip:", error)
+      io.to(roomId).emit("phase_changed", "placement")
+      io.to(roomId).emit("room_updated", room)
+      io.to(roomId).emit("turn_changed", {
+        currentTurnIndex: room.currentTurnIndex,
+        currentPlayer
+      })
+      console.log(`Trailer ended → ${currentPlayer.name} placing now`)
+    } catch (err) {
+      console.error("trailer_finished error:", err)
     }
-  })
-
-  socket.on("trailer_finished", ({ roomId }) => {
-    endTrailer(roomId)
   })
 
   socket.on("place_movie", ({ roomId, playerId, sourceIndex, destinationIndex }) => {
     try {
       const room = getRoom(roomId)
-      if (!room) return
+      if (!room || room.phase !== "placement") return
 
       const currentPlayer = room.players[room.currentTurnIndex]
-      if (currentPlayer.id !== playerId) {
+      if (!currentPlayer || currentPlayer.id !== playerId) {
         socket.emit("error", { message: "Not your turn!" })
         return
       }
 
-      const player = room.players.find(p => p.id === playerId)
-      if (player && player.timeline.length > 0) {
-        const [removed] = player.timeline.splice(sourceIndex, 1)
-        player.timeline.splice(destinationIndex, 0, removed)
+      // Reorder the timeline
+      const [moved] = currentPlayer.timeline.splice(sourceIndex, 1)
+      currentPlayer.timeline.splice(destinationIndex, 0, moved)
 
-        const isCorrect = player.timeline.every((movie, idx) => {
-          if (idx === 0) return true
-          return movie.year >= player.timeline[idx - 1].year
-        })
+      // Check if entire timeline is in chronological order
+      const isCorrect = currentPlayer.timeline.every((movie, idx) => {
+        if (idx === 0) return true
+        return movie.year >= currentPlayer.timeline[idx - 1].year
+      })
 
-        if (isCorrect) {
-          player.score += 1
-          if (player.score >= room.settings.winScore) {
-            room.phase = "finished"
-            io.to(roomId).emit("phase_changed", "finished")
-            io.to(roomId).emit("room_updated", room)
-            io.to(roomId).emit("game_over", {
-              winner: player,
-              finalScores: room.players.map(p => ({ name: p.name, score: p.score }))
-            })
-            console.log(`Game finished. Winner: ${player.name}`)
-            return
-          }
-        } else {
-          const incorrectMovie = player.timeline.splice(destinationIndex, 1)[0]
-          room.discardPile.push(incorrectMovie)
+      if (isCorrect) {
+        currentPlayer.score += 1
+        console.log(`Correct! ${currentPlayer.name} now has ${currentPlayer.score} points`)
+
+        // Check for winner
+        if (currentPlayer.score >= room.settings.winScore) {
+          room.phase = "finished"
+          io.to(roomId).emit("phase_changed", "finished")
+          io.to(roomId).emit("room_updated", room)
+          io.to(roomId).emit("game_over", {
+            winner: currentPlayer,
+            finalScores: room.players.map(p => ({ name: p.name, score: p.score }))
+          })
+          console.log(`Game over! Winner: ${currentPlayer.name}`)
+          return
         }
-
-        // Advance turn and show next trailer
-        room.currentTurnIndex = (room.currentTurnIndex + 1) % room.players.length
-        startNextTrailer(roomId)
-
-        console.log(`Player ${playerId} placed movie. Correct: ${isCorrect}`)
+      } else {
+        // Wrong placement — discard the moved card
+        const [discarded] = currentPlayer.timeline.splice(destinationIndex, 1)
+        room.discardPile.push(discarded)
+        console.log(`Wrong placement by ${currentPlayer.name}`)
       }
-    } catch (error) {
-      console.error("Error placing movie:", error)
+
+      // Advance turn
+      room.currentTurnIndex = (room.currentTurnIndex + 1) % room.players.length
+
+      // Start next trailer
+      if (room.deck.length > 0) {
+        room.currentMovie = room.deck.pop()!
+        room.phase = "trailer"
+
+        io.to(roomId).emit("phase_changed", "trailer")
+        io.to(roomId).emit("trailer_started", room.currentMovie)
+        io.to(roomId).emit("room_updated", room)
+      }
+    } catch (err) {
+      console.error("place_movie error:", err)
     }
   })
 
   socket.on("disconnect", () => {
-    console.log("Socket disconnected:", socket.id)
+    console.log("Disconnected:", socket.id)
   })
 })
-
-function endTrailer(roomId: string) {
-  const room = getRoom(roomId)
-  if (!room || room.phase !== "trailer") return
-
-  const currentPlayer = room.players[room.currentTurnIndex]
-  if (currentPlayer && room.currentMovie) {
-    currentPlayer.timeline.push(room.currentMovie)
-    room.phase = "placement"
-    skipVotes[roomId] = new Set()
-
-    io.to(roomId).emit("phase_changed", "placement")
-    io.to(roomId).emit("room_updated", room)
-    io.to(roomId).emit("turn_changed", {
-      currentTurnIndex: room.currentTurnIndex,
-      currentPlayer
-    })
-    console.log(`Trailer ended. ${currentPlayer.name}'s turn to place.`)
-  }
-}
-
-function startNextTrailer(roomId: string) {
-  const room = getRoom(roomId)
-  if (!room) return
-
-  if (room.deck.length > 0) {
-    const nextMovie = room.deck.pop()
-    if (nextMovie) {
-      room.currentMovie = nextMovie
-    }
-    room.phase = "trailer"
-    skipVotes[roomId] = new Set()
-
-    io.to(roomId).emit("phase_changed", "trailer")
-    io.to(roomId).emit("room_updated", room)
-    io.to(roomId).emit("trailer_started", room.currentMovie)
-    io.to(roomId).emit("skip_votes_updated", { skipVotes: 0, totalPlayers: room.players.length })
-  }
-}
 
 app.get("*", (req, res) => {
   res.sendFile(path.join(clientBuildPath, "index.html"))
@@ -234,6 +188,6 @@ app.get("*", (req, res) => {
 const PORT = process.env.PORT || 4000
 httpServer.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`)
-  console.log(`📁 Serving client files from: ${clientBuildPath}`)
+  console.log(`📁 Serving from: ${clientBuildPath}`)
 })
 

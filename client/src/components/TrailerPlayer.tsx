@@ -1,28 +1,22 @@
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useRef } from "react"
 
 interface TrailerPlayerProps {
   youtubeId: string
   onEnd: () => void
-  onVoteSkip: () => void
-  skipVotes: number
-  totalPlayers: number
-  hasVotedSkip: boolean
+  isHost?: boolean
 }
 
-export default function TrailerPlayer({
-  youtubeId,
-  onEnd,
-  onVoteSkip,
-  skipVotes,
-  totalPlayers,
-  hasVotedSkip,
-}: TrailerPlayerProps) {
+export default function TrailerPlayer({ youtubeId, onEnd, isHost = false }: TrailerPlayerProps) {
+  // Use a ref so the timer never gets reset on re-renders
+  const onEndRef = useRef(onEnd)
+  useEffect(() => { onEndRef.current = onEnd }, [onEnd])
+
   useEffect(() => {
     const timer = setTimeout(() => {
-      onEnd()
-    }, 60000) // 60s auto-stop fallback
+      onEndRef.current()
+    }, 60000)
     return () => clearTimeout(timer)
-  }, [onEnd])
+  }, [youtubeId]) // Only restart timer when a new trailer loads
 
   return (
     <div className="w-full">
@@ -36,27 +30,16 @@ export default function TrailerPlayer({
         ></iframe>
       </div>
 
-      {/* Skip Voting */}
-      <div className="mt-3 flex items-center justify-between bg-gray-800 rounded-lg p-3">
-        <div className="text-white text-sm">
-          {skipVotes > 0 && (
-            <span className="text-yellow-400 font-semibold">
-              {skipVotes}/{totalPlayers} players want to skip
-            </span>
-          )}
+      {isHost && (
+        <div className="mt-3 flex justify-end">
+          <button
+            onClick={onEnd}
+            className="px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-black font-semibold rounded-lg text-sm"
+          >
+            ⏭ Skip trailer
+          </button>
         </div>
-        <button
-          onClick={onVoteSkip}
-          disabled={hasVotedSkip}
-          className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
-            hasVotedSkip
-              ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-              : "bg-yellow-500 text-black hover:bg-yellow-400"
-          }`}
-        >
-          {hasVotedSkip ? "✓ Voted to skip" : "⏭ Skip trailer"}
-        </button>
-      </div>
+      )}
     </div>
   )
 }
