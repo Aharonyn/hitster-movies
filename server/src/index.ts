@@ -30,7 +30,6 @@ io.on("connection", socket => {
       const hostPlayer = addPlayer(room.id, hostName)
       socket.join(room.id)
       socket.emit("room_created", { room, hostPlayer })
-      // Emit room state to the host
       socket.emit("room_updated", room)
       console.log(`Room created: ${room.id} by ${hostName}`)
     } catch (error) {
@@ -46,9 +45,7 @@ io.on("connection", socket => {
         socket.join(roomId)
         const room = getRoom(roomId)
         if (room) {
-          // Notify all players in room
           io.to(roomId).emit("player_joined", player)
-          // Send updated room state to all players
           io.to(roomId).emit("room_updated", room)
           console.log(`${name} joined room ${roomId}`)
         }
@@ -79,29 +76,49 @@ io.on("connection", socket => {
     try {
       const room = getRoom(roomId)
       if (room && room.hostId === socket.id) {
-        room.phase = "placement"
-        room.currentTurnIndex = 0 // Start with first player
+        // Start with trailer phase
+        room.phase = "trailer"
+        room.currentTurnIndex = 0
         
-        // Give each player their first movie
-        if (room.deck.length >= room.players.length) {
-          room.players.forEach(player => {
-            const movie = room.deck.pop()
-            if (movie) {
-              player.timeline.push(movie)
-            }
-          })
+        // Pick the first movie to show trailer
+        if (room.deck.length > 0) {
+          const firstMovie = room.deck.pop()
+          if (firstMovie) {
+            room.currentMovie = firstMovie
+          }
         }
+        
+        io.to(roomId).emit("phase_changed", "trailer")
+        io.to(roomId).emit("room_updated", room)
+        io.to(roomId).emit("trailer_started", room.currentMovie)
+        console.log(`Game started in room ${roomId} - showing trailer`)
+      }
+    } catch (error) {
+      console.error("Error starting game:", error)
+    }
+  })
+
+  socket.on("trailer_finished", ({ roomId }) => {
+    try {
+      const room = getRoom(roomId)
+      if (!room) return
+
+      // After trailer, give movie to current player and start placement
+      const currentPlayer = room.players[room.currentTurnIndex]
+      if (currentPlayer && room.currentMovie) {
+        currentPlayer.timeline.push(room.currentMovie)
+        room.phase = "placement"
         
         io.to(roomId).emit("phase_changed", "placement")
         io.to(roomId).emit("room_updated", room)
         io.to(roomId).emit("turn_changed", { 
           currentTurnIndex: room.currentTurnIndex,
-          currentPlayer: room.players[room.currentTurnIndex]
+          currentPlayer: currentPlayer
         })
-        console.log(`Game started in room ${roomId}`)
+        console.log(`Trailer finished. ${currentPlayer.name}'s turn to place movie.`)
       }
     } catch (error) {
-      console.error("Error starting game:", error)
+      console.error("Error finishing trailer:", error)
     }
   })
 
@@ -110,7 +127,6 @@ io.on("connection", socket => {
       const room = getRoom(roomId)
       if (!room) return
 
-      // Check if it's this player's turn
       const currentPlayer = room.players[room.currentTurnIndex]
       if (currentPlayer.id !== playerId) {
         socket.emit("error", { message: "Not your turn!" })
@@ -119,21 +135,17 @@ io.on("connection", socket => {
 
       const player = room.players.find(p => p.id === playerId)
       if (player && player.timeline.length > 0) {
-        // Move movie in timeline
         const [removed] = player.timeline.splice(sourceIndex, 1)
         player.timeline.splice(destinationIndex, 0, removed)
         
-        // Check if timeline is in correct order
         const isCorrect = player.timeline.every((movie, idx) => {
           if (idx === 0) return true
           return movie.year >= player.timeline[idx - 1].year
         })
 
         if (isCorrect) {
-          // Correct placement! Award point
           player.score += 1
           
-          // Check for winner
           if (player.score >= room.settings.winScore) {
             room.phase = "finished"
             io.to(roomId).emit("phase_changed", "finished")
@@ -146,31 +158,42 @@ io.on("connection", socket => {
             return
           }
 
-          // Give player next movie if available
+          // Correct! Show next trailer
           if (room.deck.length > 0) {
+            room.phase = "trailer"
+            room.currentTurnIndex = (room.currentTurnIndex + 1) % room.players.length
             const nextMovie = room.deck.pop()
             if (nextMovie) {
-              player.timeline.push(nextMovie)
+              room.currentMovie = nextMovie
             }
+            
+            io.to(roomId).emit("phase_changed", "trailer")
+            io.to(roomId).emit("room_updated", room)
+            io.to(roomId).emit("trailer_started", room.currentMovie)
+            console.log(`Correct placement! Showing next trailer.`)
           }
         } else {
           // Wrong placement - move movie to discard
           const incorrectMovie = player.timeline.splice(destinationIndex, 1)[0]
           room.discardPile.push(incorrectMovie)
+          
+          // Show next trailer
+          if (room.deck.length > 0) {
+            room.phase = "trailer"
+            room.currentTurnIndex = (room.currentTurnIndex + 1) % room.players.length
+            const nextMovie = room.deck.pop()
+            if (nextMovie) {
+              room.currentMovie = nextMovie
+            }
+            
+            io.to(roomId).emit("phase_changed", "trailer")
+            io.to(roomId).emit("room_updated", room)
+            io.to(roomId).emit("trailer_started", room.currentMovie)
+            console.log(`Wrong placement. Showing next trailer.`)
+          }
         }
-
-        // Advance to next player's turn
-        room.currentTurnIndex = (room.currentTurnIndex + 1) % room.players.length
         
-        // Send updated room state to all players
-        io.to(roomId).emit("room_updated", room)
-        io.to(roomId).emit("turn_changed", { 
-          currentTurnIndex: room.currentTurnIndex,
-          currentPlayer: room.players[room.currentTurnIndex],
-          wasCorrect: isCorrect
-        })
-        
-        console.log(`Player ${playerId} placed movie. Correct: ${isCorrect}. Next turn: ${room.currentTurnIndex}`)
+        console.log(`Player ${playerId} placed movie. Correct: ${isCorrect}`)
       }
     } catch (error) {
       console.error("Error placing movie:", error)
@@ -182,7 +205,6 @@ io.on("connection", socket => {
   })
 })
 
-// SPA fallback - must be AFTER static files
 app.get("*", (req, res) => {
   res.sendFile(path.join(clientBuildPath, "index.html"))
 })
@@ -192,3 +214,4 @@ httpServer.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`)
   console.log(`📁 Serving client files from: ${clientBuildPath}`)
 })
+

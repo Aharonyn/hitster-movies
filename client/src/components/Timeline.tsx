@@ -23,19 +23,24 @@ export default function Timeline({ movies, onPlace }: TimelineProps) {
             ref={provided.innerRef}
             {...provided.droppableProps}
           >
-            {movies.map((movie, idx) => (
-              <Draggable key={movie.id} draggableId={movie.id} index={idx}>
-                {provided => (
-                  <div
-                    ref={provided.innerRef}
-                    {...provided.draggableProps}
-                    {...provided.dragHandleProps}
-                  >
-                    <MovieCard movie={movie} />
-                  </div>
-                )}
-              </Draggable>
-            ))}
+            {movies.map((movie, idx) => {
+              // Hide year on the last card (the newest card being placed)
+              const isLastCard = idx === movies.length - 1
+              
+              return (
+                <Draggable key={movie.id} draggableId={movie.id} index={idx}>
+                  {provided => (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.draggableProps}
+                      {...provided.dragHandleProps}
+                    >
+                      <MovieCard movie={movie} hideYear={isLastCard} />
+                    </div>
+                  )}
+                </Draggable>
+              )
+            })}
             {provided.placeholder}
           </div>
         )}
@@ -43,3 +48,4 @@ export default function Timeline({ movies, onPlace }: TimelineProps) {
     </DragDropContext>
   )
 }
+
