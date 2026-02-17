@@ -59,22 +59,37 @@ export default function HostPage() {
     socket.emit("trailer_finished", { roomId })
   }
 
+  const endGame = () => {
+    socket.emit("end_game", { roomId })
+  }
+
   const isMyTurn = room && room.players[room.currentTurnIndex]?.id === playerId
   const currentTurnPlayer = room?.players[room.currentTurnIndex]
+  const gameActive = phase === "trailer" || phase === "placement"
 
   return (
     <div className="p-4 max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-white">🎬 {hostPlayer?.name}</h1>
-        <button
-          onClick={copyRoomCode}
-          title="Click to copy room code"
-          className="flex items-center gap-2 bg-white hover:bg-yellow-100 transition-colors px-3 py-2 rounded-lg border-2 border-white hover:border-yellow-400"
-        >
-          <span className="font-mono font-bold text-black text-lg tracking-widest">{roomId}</span>
-          <span className="text-gray-500 text-sm">{copied ? "✅ Copied!" : "📋"}</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {gameActive && (
+            <button
+              onClick={endGame}
+              className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg"
+            >
+              🛑 End Game
+            </button>
+          )}
+          <button
+            onClick={copyRoomCode}
+            title="Click to copy room code"
+            className="flex items-center gap-2 bg-white hover:bg-yellow-100 transition-colors px-3 py-2 rounded-lg border-2 border-white hover:border-yellow-400"
+          >
+            <span className="font-mono font-bold text-black text-lg tracking-widest">{roomId}</span>
+            <span className="text-gray-500 text-sm">{copied ? "✅ Copied!" : "📋"}</span>
+          </button>
+        </div>
       </div>
 
       {/* Lobby */}

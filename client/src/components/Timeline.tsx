@@ -19,14 +19,12 @@ export default function Timeline({ movies, onPlace }: TimelineProps) {
       <Droppable droppableId="timeline" direction="horizontal">
         {provided => (
           <div
-            className="flex gap-2 overflow-x-auto p-2 border rounded"
+            className="flex gap-2 overflow-x-auto p-2 border rounded min-h-36 items-center"
             ref={provided.innerRef}
             {...provided.droppableProps}
           >
             {movies.map((movie, idx) => {
-              // Hide year on the last card (the newest card being placed)
-              const isLastCard = idx === movies.length - 1
-              
+              const isActive = idx === movies.length - 1
               return (
                 <Draggable key={movie.id} draggableId={movie.id} index={idx}>
                   {provided => (
@@ -35,7 +33,7 @@ export default function Timeline({ movies, onPlace }: TimelineProps) {
                       {...provided.draggableProps}
                       {...provided.dragHandleProps}
                     >
-                      <MovieCard movie={movie} hideYear={isLastCard} />
+                      <MovieCard movie={movie} isActive={isActive} />
                     </div>
                   )}
                 </Draggable>

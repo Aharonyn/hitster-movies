@@ -89,6 +89,27 @@ io.on("connection", socket => {
     }
   })
 
+  // Host-only: end game at any time
+  socket.on("end_game", ({ roomId }) => {
+    try {
+      const room = getRoom(roomId)
+      if (!room || room.hostId !== socket.id) return
+
+      room.phase = "finished"
+      // Determine winner by score
+      const winner = room.players.reduce((a, b) => b.score > a.score ? b : a)
+      io.to(roomId).emit("phase_changed", "finished")
+      io.to(roomId).emit("room_updated", room)
+      io.to(roomId).emit("game_over", {
+        winner,
+        finalScores: room.players.map(p => ({ name: p.name, score: p.score }))
+      })
+      console.log(`Game ended by host in room ${roomId}`)
+    } catch (err) {
+      console.error("end_game error:", err)
+    }
+  })
+
   // Host-only: called when host clicks Skip or trailer auto-ends
   socket.on("trailer_finished", ({ roomId }) => {
     try {

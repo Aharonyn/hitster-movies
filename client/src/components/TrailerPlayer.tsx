@@ -7,7 +7,6 @@ interface TrailerPlayerProps {
 }
 
 export default function TrailerPlayer({ youtubeId, onEnd, isHost = false }: TrailerPlayerProps) {
-  // Use a ref so the timer never gets reset on re-renders
   const onEndRef = useRef(onEnd)
   useEffect(() => { onEndRef.current = onEnd }, [onEnd])
 
@@ -16,17 +15,23 @@ export default function TrailerPlayer({ youtubeId, onEnd, isHost = false }: Trai
       onEndRef.current()
     }, 60000)
     return () => clearTimeout(timer)
-  }, [youtubeId]) // Only restart timer when a new trailer loads
+  }, [youtubeId])
+
+  // modestbranding=1 minimizes YouTube branding/title as much as their API allows
+  // rel=0 prevents related videos showing at end
+  // iv_load_policy=3 hides video annotations
+  const embedUrl = `https://www.youtube.com/embed/${youtubeId}?autoplay=1&controls=0&modestbranding=1&rel=0&iv_load_policy=3&showinfo=0`
 
   return (
     <div className="w-full">
-      <div className="w-full h-64">
+      <div className="w-full aspect-video rounded-lg overflow-hidden">
         <iframe
           width="100%"
           height="100%"
-          src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&controls=0`}
-          title="Trailer"
+          src={embedUrl}
+          title="Movie Trailer"
           allow="autoplay; encrypted-media"
+          allowFullScreen
         ></iframe>
       </div>
 
