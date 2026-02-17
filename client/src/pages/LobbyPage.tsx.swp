@@ -27,9 +27,10 @@ export default function LobbyPage() {
   const joinRoom = () => {
     if (!name.trim() || !roomCode.trim()) return
     setError("")
-    socket.emit("join_room", { roomId: roomCode.trim(), name: name.trim() })
+    const code = roomCode.trim().toUpperCase()
+    socket.emit("join_room", { roomId: code, name: name.trim() })
     socket.once("player_joined", (player) => {
-      navigate(`/player?roomId=${roomCode.trim()}&playerId=${player.id}`)
+      navigate(`/player?roomId=${code}&playerId=${player.id}`)
     })
     socket.once("error", ({ message }) => {
       setError(message || "Room not found. Check the code and try again.")
@@ -41,7 +42,6 @@ export default function LobbyPage() {
       <div className="w-full max-w-md">
         <h1 className="text-3xl font-bold text-white text-center mb-8">🎬 Movie Timeline</h1>
 
-        {/* Choose Mode */}
         {mode === "choose" && (
           <div className="flex flex-col gap-4">
             <button
@@ -59,7 +59,6 @@ export default function LobbyPage() {
           </div>
         )}
 
-        {/* Create Room */}
         {mode === "create" && (
           <div className="flex flex-col gap-4">
             <button onClick={() => setMode("choose")} className="text-gray-400 hover:text-white text-sm self-start">
@@ -76,21 +75,15 @@ export default function LobbyPage() {
             <div className="bg-white rounded-lg p-4">
               <label className="block text-black font-semibold mb-1">Win score: {winScore}</label>
               <input
-                type="range"
-                min={5}
-                max={15}
-                value={winScore}
+                type="range" min={5} max={15} value={winScore}
                 onChange={e => setWinScore(Number(e.target.value))}
                 className="w-full"
               />
             </div>
             <div className="bg-white rounded-lg p-4">
               <label className="flex items-center gap-2 text-black">
-                <input
-                  type="checkbox"
-                  checked={sequelConfusion}
-                  onChange={e => setSequelConfusion(e.target.checked)}
-                />
+                <input type="checkbox" checked={sequelConfusion}
+                  onChange={e => setSequelConfusion(e.target.checked)} />
                 <span className="font-semibold">Sequel Confusion Mode</span>
               </label>
             </div>
@@ -104,7 +97,6 @@ export default function LobbyPage() {
           </div>
         )}
 
-        {/* Join Room */}
         {mode === "join" && (
           <div className="flex flex-col gap-4">
             <button onClick={() => setMode("choose")} className="text-gray-400 hover:text-white text-sm self-start">
@@ -120,17 +112,16 @@ export default function LobbyPage() {
             />
             <input
               type="text"
-              placeholder="Room code"
+              placeholder="Room code (e.g. K7BX2M)"
               value={roomCode}
               onChange={e => { setRoomCode(e.target.value.toUpperCase()); setError("") }}
-              className="border p-3 rounded-lg text-black bg-white text-lg font-mono tracking-widest"
+              className="border p-3 rounded-lg text-black bg-white text-lg font-mono tracking-widest uppercase"
+              maxLength={6}
             />
-            {error && (
-              <p className="text-red-400 text-sm font-semibold">{error}</p>
-            )}
+            {error && <p className="text-red-400 text-sm font-semibold">{error}</p>}
             <button
               onClick={joinRoom}
-              disabled={!name.trim() || !roomCode.trim()}
+              disabled={!name.trim() || roomCode.trim().length < 6}
               className="bg-green-600 text-white p-3 rounded-lg text-lg font-semibold hover:bg-green-700 disabled:bg-gray-500 disabled:cursor-not-allowed"
             >
               Join Room

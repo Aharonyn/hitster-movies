@@ -16,6 +16,14 @@ export default function HostPage() {
   const [phase, setPhase] = useState("lobby")
   const [skipVotes, setSkipVotes] = useState(0)
   const [hasVotedSkip, setHasVotedSkip] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  const copyRoomCode = () => {
+    navigator.clipboard.writeText(roomId).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
 
   useEffect(() => {
     socket.emit("get_room", { roomId })
@@ -75,18 +83,28 @@ export default function HostPage() {
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-white">🎬 {hostPlayer?.name}</h1>
-        <div className="text-white">
-          Room: <span className="font-mono bg-white text-black px-2 py-1 rounded font-bold tracking-widest">{roomId}</span>
-        </div>
+        <button
+          onClick={copyRoomCode}
+          title="Click to copy room code"
+          className="flex items-center gap-2 bg-white hover:bg-yellow-100 transition-colors px-3 py-2 rounded-lg border-2 border-white hover:border-yellow-400"
+        >
+          <span className="font-mono font-bold text-black text-lg tracking-widest">{roomId}</span>
+          <span className="text-gray-500 text-sm">{copied ? "✅ Copied!" : "📋"}</span>
+        </button>
       </div>
 
       {/* Lobby */}
       {phase === "lobby" && (
         <div className="mb-6 p-4 bg-white rounded-lg">
           <h2 className="text-xl font-semibold mb-2 text-black">Waiting for players...</h2>
-          <p className="text-gray-700 mb-4">
-            Share the room code <span className="font-mono font-bold text-black">{roomId}</span> with your friends!
-          </p>
+          <p className="text-gray-700 mb-2">Share this code with your friends:</p>
+          <button
+            onClick={copyRoomCode}
+            className="flex items-center gap-3 bg-gray-100 hover:bg-yellow-100 border-2 border-dashed border-gray-400 hover:border-yellow-500 rounded-lg px-4 py-3 mb-4 transition-colors w-full justify-center"
+          >
+            <span className="font-mono font-bold text-black text-3xl tracking-widest">{roomId}</span>
+            <span className="text-gray-500">{copied ? "✅ Copied!" : "📋 Tap to copy"}</span>
+          </button>
           <div className="mb-4">
             {room?.players.map(p => (
               <div key={p.id} className="text-black py-1">👤 {p.name} {p.id === playerId && "(You)"}</div>

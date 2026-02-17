@@ -42,19 +42,18 @@ io.on("connection", socket => {
 
   socket.on("join_room", ({ roomId, name }) => {
     try {
-      const room = getRoom(roomId)
+      const normalizedId = roomId.toUpperCase().trim()
+      const room = getRoom(normalizedId)
       if (!room) {
         socket.emit("error", { message: "Room not found. Check the code and try again." })
         return
       }
-      const player = addPlayer(roomId, name)
+      const player = addPlayer(normalizedId, name)
       if (player) {
-        socket.join(roomId)
-        // Send player back to the joining client specifically
+        socket.join(normalizedId)
         socket.emit("player_joined", player)
-        // Notify everyone in the room of the update
-        io.to(roomId).emit("room_updated", getRoom(roomId))
-        console.log(`${name} joined room ${roomId}`)
+        io.to(normalizedId).emit("room_updated", getRoom(normalizedId))
+        console.log(`${name} joined room ${normalizedId}`)
       }
     } catch (error) {
       console.error("Error joining room:", error)
@@ -64,13 +63,13 @@ io.on("connection", socket => {
 
   socket.on("get_room", ({ roomId }) => {
     try {
-      const room = getRoom(roomId)
+      const normalizedId = roomId.toUpperCase().trim()
+      const room = getRoom(normalizedId)
       if (room) {
         socket.emit("room_updated", room)
-        // Also send current skip vote count if in trailer phase
-        if (room.phase === "trailer" && skipVotes[roomId]) {
+        if (room.phase === "trailer" && skipVotes[normalizedId]) {
           socket.emit("skip_votes_updated", {
-            skipVotes: skipVotes[roomId].size,
+            skipVotes: skipVotes[normalizedId].size,
             totalPlayers: room.players.length
           })
         }
