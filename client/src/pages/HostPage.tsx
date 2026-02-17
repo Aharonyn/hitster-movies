@@ -14,6 +14,8 @@ export default function HostPage() {
   const [hostPlayer, setHostPlayer] = useState<Player | null>(null)
   const [currentMovie, setCurrentMovie] = useState<Movie | null>(null)
   const [phase, setPhase] = useState("lobby")
+  const [skipVotes, setSkipVotes] = useState(0)
+  const [hasVotedSkip, setHasVotedSkip] = useState(false)
 
   useEffect(() => {
     socket.emit("get_room", { roomId })
@@ -21,53 +23,48 @@ export default function HostPage() {
     socket.on("room_updated", (updatedRoom: Room) => {
       setRoom(updatedRoom)
       setPhase(updatedRoom.phase)
-      if (updatedRoom.currentMovie) {
-        setCurrentMovie(updatedRoom.currentMovie)
-      }
+      if (updatedRoom.currentMovie) setCurrentMovie(updatedRoom.currentMovie)
       const host = updatedRoom.players.find(p => p.id === playerId)
       setHostPlayer(host || null)
     })
 
-    socket.on("player_joined", (player: Player) => {
-      // Room will be updated via room_updated event
-    })
-    
     socket.on("phase_changed", (newPhase: string) => {
       setPhase(newPhase)
-    })
-    
-    socket.on("trailer_started", (movie: Movie) => {
-      setCurrentMovie(movie)
+      if (newPhase === "trailer") {
+        setSkipVotes(0)
+        setHasVotedSkip(false)
+      }
     })
 
-    socket.on("turn_changed", ({ currentTurnIndex }) => {
-      console.log("Turn changed to index:", currentTurnIndex)
+    socket.on("trailer_started", (movie: Movie) => {
+      setCurrentMovie(movie)
+      setSkipVotes(0)
+      setHasVotedSkip(false)
+    })
+
+    socket.on("skip_votes_updated", ({ skipVotes: votes }) => {
+      setSkipVotes(votes)
     })
 
     return () => {
       socket.off("room_updated")
-      socket.off("player_joined")
       socket.off("phase_changed")
       socket.off("trailer_started")
-      socket.off("turn_changed")
+      socket.off("skip_votes_updated")
     }
   }, [roomId, playerId])
 
-  const startGame = () => {
-    socket.emit("start_game", { roomId })
-  }
+  const startGame = () => socket.emit("start_game", { roomId })
 
   const placeMovie = (sourceIndex: number, destinationIndex: number) => {
-    socket.emit("place_movie", { 
-      roomId, 
-      playerId, 
-      sourceIndex, 
-      destinationIndex 
-    })
+    socket.emit("place_movie", { roomId, playerId, sourceIndex, destinationIndex })
   }
 
-  const handleTrailerEnd = () => {
-    socket.emit("trailer_finished", { roomId })
+  const handleVoteSkip = () => {
+    if (!hasVotedSkip) {
+      setHasVotedSkip(true)
+      socket.emit("vote_skip", { roomId, playerId })
+    }
   }
 
   const isMyTurn = room && room.players[room.currentTurnIndex]?.id === playerId
@@ -75,149 +72,105 @@ export default function HostPage() {
 
   return (
     <div className="p-4 max-w-6xl mx-auto">
+      {/* Header */}
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-white">Host & Player: {hostPlayer?.name}</h1>
-        <div className="text-lg text-white">
-          Room: <span className="font-mono bg-gray-200 px-2 py-1 rounded text-black">{roomId}</span>
+        <h1 className="text-2xl font-bold text-white">🎬 {hostPlayer?.name}</h1>
+        <div className="text-white">
+          Room: <span className="font-mono bg-white text-black px-2 py-1 rounded font-bold tracking-widest">{roomId}</span>
         </div>
       </div>
 
-      {/* Turn Indicator - only show during placement phase */}
-      {phase === "placement" && currentTurnPlayer && (
-        <div className={`mb-4 p-4 rounded-lg border-2 ${
-          isMyTurn 
-            ? 'bg-green-100 border-green-500' 
-            : 'bg-yellow-100 border-yellow-500'
-        }`}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              {isMyTurn ? (
-                <>
-                  <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                  <span className="text-xl font-bold text-green-800">
-                    🎬 YOUR TURN!
-                  </span>
-                  <span className="text-gray-700">Place your movie on the timeline</span>
-                </>
-              ) : (
-                <>
-                  <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                  <span className="text-xl font-semibold text-yellow-800">
-                    Waiting for {currentTurnPlayer.name}'s turn...
-                  </span>
-                </>
-              )}
-            </div>
-            <div className="text-sm text-gray-600">
-              Turn {room!.currentTurnIndex + 1} of {room!.players.length}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Host Controls */}
+      {/* Lobby */}
       {phase === "lobby" && (
-        <div className="mb-6 p-4 bg-blue-50 rounded">
-          <h2 className="text-xl font-semibold mb-2 text-black">Host Controls</h2>
-          <p className="mb-3 text-gray-700">
-            Players in room: {room?.players.length || 0}
+        <div className="mb-6 p-4 bg-white rounded-lg">
+          <h2 className="text-xl font-semibold mb-2 text-black">Waiting for players...</h2>
+          <p className="text-gray-700 mb-4">
+            Share the room code <span className="font-mono font-bold text-black">{roomId}</span> with your friends!
           </p>
+          <div className="mb-4">
+            {room?.players.map(p => (
+              <div key={p.id} className="text-black py-1">👤 {p.name} {p.id === playerId && "(You)"}</div>
+            ))}
+          </div>
           <button
             onClick={startGame}
             disabled={!room || room.players.length < 1}
-            className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            className="bg-green-600 text-white px-6 py-3 rounded-lg text-lg font-semibold hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
             Start Game
           </button>
         </div>
       )}
 
-      {/* Trailer Phase */}
+      {/* Trailer Phase - NO movie name shown */}
       {phase === "trailer" && currentMovie && (
         <div className="mb-6">
-          <div className="mb-3 p-3 bg-blue-100 rounded text-center">
-            <p className="text-lg font-bold text-black">
-              🎬 Watch the trailer and guess the year!
-            </p>
-          </div>
+          <p className="text-center text-white font-semibold mb-3">🎬 What movie is this? Guess the year!</p>
           <TrailerPlayer
             youtubeId={currentMovie.youtubeId}
-            onEnd={handleTrailerEnd}
+            onEnd={() => socket.emit("trailer_finished", { roomId })}
+            onVoteSkip={handleVoteSkip}
+            skipVotes={skipVotes}
+            totalPlayers={room?.players.length || 1}
+            hasVotedSkip={hasVotedSkip}
           />
-          <p className="text-center mt-2 text-lg font-semibold text-white">
-            {currentMovie.title}
-          </p>
         </div>
       )}
 
-      {/* Host's Timeline */}
+      {/* Turn Indicator */}
+      {phase === "placement" && currentTurnPlayer && (
+        <div className={`mb-4 p-4 rounded-lg border-2 ${isMyTurn ? 'bg-green-100 border-green-500' : 'bg-yellow-100 border-yellow-500'}`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {isMyTurn ? (
+                <>
+                  <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                  <span className="text-xl font-bold text-green-800">🎯 YOUR TURN! Place the movie.</span>
+                </>
+              ) : (
+                <>
+                  <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                  <span className="text-xl font-semibold text-yellow-800">Waiting for {currentTurnPlayer.name}...</span>
+                </>
+              )}
+            </div>
+            <span className="text-sm text-gray-600">Turn {room!.currentTurnIndex + 1}/{room!.players.length}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Timeline */}
       {hostPlayer && hostPlayer.timeline.length > 0 && phase === "placement" && (
         <div className="mb-6">
           <div className="flex justify-between items-center mb-2">
             <h2 className="text-xl font-semibold text-white">Your Timeline</h2>
-            <div className="text-lg font-bold text-white">
-              Score: <span className="text-blue-400">{hostPlayer.score}</span>
-            </div>
+            <span className="text-white font-bold">Score: <span className="text-blue-400">{hostPlayer.score}</span></span>
           </div>
-          {isMyTurn ? (
-            <div className="border-2 border-green-500 rounded-lg p-2 bg-green-50">
-              <Timeline 
-                movies={hostPlayer.timeline} 
-                onPlace={placeMovie}
-              />
-            </div>
-          ) : (
-            <div className="border-2 border-gray-300 rounded-lg p-2 bg-gray-50 opacity-60">
-              <Timeline 
-                movies={hostPlayer.timeline} 
-                onPlace={() => {}}
-              />
-              {!isMyTurn && (
-                <p className="text-center mt-2 text-sm text-gray-600">
-                  Waiting for your turn...
-                </p>
-              )}
-            </div>
-          )}
+          <div className={`border-2 rounded-lg p-2 ${isMyTurn ? 'border-green-500 bg-green-50' : 'border-gray-500 bg-gray-800 opacity-60'}`}>
+            <Timeline movies={hostPlayer.timeline} onPlace={isMyTurn ? placeMovie : () => {}} />
+            {!isMyTurn && <p className="text-center mt-1 text-sm text-gray-400">Waiting for your turn...</p>}
+          </div>
         </div>
       )}
 
-      {/* All Players List */}
+      {/* Players List */}
       <div className="mt-6">
-        <h2 className="text-xl font-semibold mb-3 text-white">All Players</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <h2 className="text-lg font-semibold text-white mb-3">Players</h2>
+        <div className="grid grid-cols-2 gap-2">
           {room?.players.map((p, index) => {
             const isCurrentTurn = room.currentTurnIndex === index && phase === "placement"
-            const isThisPlayer = p.id === playerId
-            
+            const isMe = p.id === playerId
             return (
-              <div 
-                key={p.id} 
-                className={`p-3 rounded border-2 transition-all ${
-                  isCurrentTurn 
-                    ? 'bg-green-100 border-green-500 ring-2 ring-green-300' 
-                    : isThisPlayer 
-                      ? 'bg-blue-100 border-blue-500' 
-                      : 'bg-white border-gray-300'
-                }`}
-              >
+              <div key={p.id} className={`p-3 rounded-lg border-2 ${
+                isCurrentTurn ? 'bg-green-100 border-green-500' : isMe ? 'bg-blue-100 border-blue-500' : 'bg-white border-gray-300'
+              }`}>
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-2">
-                    {isCurrentTurn && (
-                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                    )}
-                    <span className="font-semibold text-black">
-                      {p.name} {isThisPlayer && "(You)"}
-                    </span>
-                    {isCurrentTurn && (
-                      <span className="text-xs bg-green-500 text-white px-2 py-1 rounded">
-                        TURN
-                      </span>
-                    )}
+                    {isCurrentTurn && <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>}
+                    <span className="font-semibold text-black">{p.name} {isMe && "(You)"}</span>
+                    {isCurrentTurn && <span className="text-xs bg-green-500 text-white px-1 py-0.5 rounded">TURN</span>}
                   </div>
-                  <span className="text-sm bg-gray-200 px-2 py-1 rounded text-black">
-                    Score: {p.score} | Cards: {p.timeline.length}
-                  </span>
+                  <span className="text-sm text-black">⭐ {p.score}</span>
                 </div>
               </div>
             )
@@ -225,31 +178,21 @@ export default function HostPage() {
         </div>
       </div>
 
-      {/* Game Phase Indicator */}
-      {phase !== "lobby" && phase !== "finished" && (
-        <div className="mt-6 p-3 bg-yellow-100 rounded text-center">
-          <p className="font-semibold text-black">
-            Current Phase: <span className="uppercase">{phase}</span>
-          </p>
-        </div>
-      )}
-
-      {/* Game Finished */}
-      {phase === "finished" && (
+      {/* Game Over */}
+      {phase === "finished" && room && (
         <div className="mt-6 p-6 bg-purple-100 border-2 border-purple-500 rounded-lg text-center">
-          <h2 className="text-2xl font-bold mb-4 text-black">🎉 Game Over! 🎉</h2>
-          <div className="text-lg">
-            {room && (() => {
-              const winner = room.players.reduce((prev, current) => 
-                (current.score > prev.score) ? current : prev
-              )
-              return (
-                <p className="font-semibold text-black">
-                  Winner: <span className="text-purple-600">{winner.name}</span> with {winner.score} points!
+          <h2 className="text-2xl font-bold mb-2 text-black">🎉 Game Over!</h2>
+          {(() => {
+            const winner = room.players.reduce((a, b) => b.score > a.score ? b : a)
+            return (
+              <>
+                <p className="text-lg font-semibold text-black">
+                  🏆 {winner.name} wins with {winner.score} points!
                 </p>
-              )
-            })()}
-          </div>
+                {winner.id === playerId && <p className="text-2xl font-bold text-green-600 mt-2">YOU WON! 🎬</p>}
+              </>
+            )
+          })()}
         </div>
       )}
     </div>
