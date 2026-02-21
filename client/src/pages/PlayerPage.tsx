@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react"
 import { useSearchParams } from "react-router-dom"
 import { socket } from "../socket"
 import Timeline from "../components/Timeline"
-import TrailerPlayer from "../components/TrailerPlayer"
 import RevealDialog from "../components/RevealDialog"
 import { Movie, Player, Room } from "../types"
 
@@ -13,7 +12,6 @@ export const PlayerPage: React.FC = () => {
 
   const [room, setRoom] = useState<Room | null>(null)
   const [player, setPlayer] = useState<Player | null>(null)
-  const [currentMovie, setCurrentMovie] = useState<Movie | null>(null)
   const [phase, setPhase] = useState("lobby")
   const [reveal, setReveal] = useState<any>(null)
 
@@ -23,7 +21,6 @@ export const PlayerPage: React.FC = () => {
     socket.on("room_updated", (updatedRoom: Room) => {
       setRoom(updatedRoom)
       setPhase(updatedRoom.phase)
-      if (updatedRoom.currentMovie) setCurrentMovie(updatedRoom.currentMovie)
       const me = updatedRoom.players.find(p => p.id === playerId)
       setPlayer(me || null)
     })
@@ -32,8 +29,7 @@ export const PlayerPage: React.FC = () => {
       setPhase(newPhase)
     })
 
-    socket.on("trailer_started", (movie: Movie) => {
-      setCurrentMovie(movie)
+    socket.on("trailer_started", () => {
       setReveal(null)
     })
 
@@ -87,15 +83,13 @@ export const PlayerPage: React.FC = () => {
         </div>
       )}
 
-      {/* Trailer Phase - NO movie name shown */}
-      {phase === "trailer" && currentMovie && (
-        <div className="mb-6">
-          <p className="text-center text-white font-semibold mb-3">🎬 What movie is this? Guess the year!</p>
-          <TrailerPlayer
-            youtubeId={currentMovie.youtubeId}
-            onEnd={() => {}}
-            isHost={false}
-          />
+      {/* Trailer Phase - Players watch on host's screen */}
+      {phase === "trailer" && (
+        <div className="mb-6 p-8 bg-gradient-to-br from-purple-900 to-blue-900 rounded-2xl text-center border-2 border-purple-500">
+          <div className="text-6xl mb-4">🎬</div>
+          <h2 className="text-3xl font-bold text-white mb-3">Trailer Playing</h2>
+          <p className="text-xl text-purple-200 mb-2">Watch the trailer on the host's screen</p>
+          <p className="text-lg text-purple-300">Get ready to guess the year!</p>
         </div>
       )}
 
